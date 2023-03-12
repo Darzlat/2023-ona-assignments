@@ -1,7 +1,7 @@
 Exercise 0
 ================
 
-## Hello, TA!
+## Hello, network!
 
 `library(tidyverse)`
 

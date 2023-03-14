@@ -1,0 +1,180 @@
+linkedin = read.delim("Connections.txt", header=F) # Read the text file
+linkedin = linkedin[-c(1, 2, 3), ] # Remove the first three rows as they contain disclaimers
+names(linkedin) = linkedin[1,] # Assign the new top row as the header
+linkedin = linkedin[-c(1), ] # And then removed (as it is already a header)
+
+
+write.csv(linkedin, "C:\\Users\\dobri\\OneDrive\\Desktop\\McGill Courses\\ORGB 672\\linkedin.csv", row.names=FALSE) # Convert the text file to CSV
+linkedincsv = read.csv("linkedin.csv") # Read the new CSV file
+
+install.packages("magrittr")# Install packages
+install.packages("dplyr")    
+library(magrittr) 
+library(dplyr)
+
+linkedincsv %>% count(Company, sort = TRUE) # Sort employer companies by frequency
+nrow(linkedincsv) # Count unique employers
+
+install.packages("tidygraph") # More packages
+library(tidygraph)
+install.packages("ggraph")
+library(ggraph)
+install.packages("stringr")
+library(stringr)
+library(igraph)
+
+paste(linkedincsv$First.Name, " ", substr(linkedincsv$Last.Name, 0, 1), ".", sep="") # Print the first name and last name initial of each connection
+
+linkedincsv[7] = linkedincsv[4] # Duplicate the company column (to make it easier to transform)
+linkedincsv[8] = paste(linkedincsv$First.Name, " ", substr(linkedincsv$Last.Name, 0, 1), ".", sep="") # Put the name and initial in a new column
+
+LC = crossprod(table(linkedincsv[7:8])) # Make a co-occurrence matrix
+diag(LC) = 0
+matrix = as.data.frame(LC)
+
+nodes <- matrix %>% # Create the nodes of our network (i.e. the names of each connection)
+  dplyr::mutate(Person = rownames(.),
+                Colleagues = rowSums(.)) %>%
+  dplyr::select(Person, Colleagues) %>%
+  dplyr::filter(!str_detect(Person, "SCENE"))
+
+edges <- matrix %>% # Create the edges (i.e. who they are employed by)
+  dplyr::mutate(from = rownames(.)) %>%
+  tidyr::gather(to, Frequency, "Aanika A.":"Zhenye (Sunny) W.") %>% # Gather them from first to last alphabetically
+  dplyr::mutate(Frequency = ifelse(Frequency == 0, NA, Frequency))
+
+gr = igraph::graph_from_data_frame(d=edges, vertices=nodes, directed = FALSE) # Generate a graph model as per instructions
+
+labels <- tidygraph::as_tbl_graph(gr) %>% # Create the labels as well
+  tidygraph::activate(nodes) %>% 
+  dplyr::mutate(label=name)
+
+# Set a seed
+set.seed(12345)
+# Plot the network (version 1: no add-ons)
+labels %>%
+  ggraph(layout = "fr") +
+  geom_edge_arc(colour= "gray50",
+                lineend = "round",
+                strength = .1,
+                alpha = .1) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE, 
+                 point.padding = unit(0.2, "lines"), 
+                 colour="gray10") +
+  theme_graph(background = "white") +
+  guides(edge_width = FALSE,
+         edge_alpha = FALSE)
+
+v.size = V(labels)$Colleagues # Adjust the size of the nodes based on the amount of colleagues in the same company
+v.size
+
+# Idem
+set.seed(12345)
+# Plot the network (version 2: with node weight adjusted)
+labels %>%
+  ggraph(layout = "fr") +
+  geom_edge_arc(colour= "gray50",
+                lineend = "round",
+                strength = .1) +
+  geom_node_point(size=log(v.size)*2) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE, 
+                 point.padding = unit(0.2, "lines"), 
+                 size=sqrt(v.size), 
+                 colour="gray10") +
+  scale_edge_width(range = c(0, 2.5)) +
+  scale_edge_alpha(range = c(0, .3)) +
+  theme_graph(background = "white") +
+  guides(edge_width = FALSE,
+         edge_alpha = FALSE)
+
+E(labels)$weight = E(labels)$Frequency # Add weight to edges as well based on the amount of colleagues
+head(E(labels)$weight, 300)
+
+# Idem
+set.seed(12345)
+# Plot the network (wersion 3: with edge weight adjusted)
+labels %>%
+  ggraph(layout = "fr") +
+  geom_edge_arc(colour= "gray50",
+                lineend = "round",
+                strength = .1,
+                aes(edge_width = weight,
+                    alpha = weight)) +
+  geom_node_point(size=log(v.size)*2) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE, 
+                 point.padding = unit(0.2, "lines"), 
+                 size=sqrt(v.size), 
+                 colour="gray10") +
+  scale_edge_width(range = c(0, 2.5)) +
+  scale_edge_alpha(range = c(0, .3)) +
+  theme_graph(background = "white") +
+  theme(legend.position = "top") +
+  guides(edge_width = FALSE,
+         edge_alpha = FALSE)
+
+linkedincsv %>% count(Company, sort = TRUE) # Sort by employer frequency again
+
+
+# Define colors (employers occuring only once are labeled as 'other)
+mcgill <- c("Yichuan D.", "Fatih N.", "Michael M.", "Elizabeth H.", "Junru W.", "Yanda T.", "Shoeb H.", "Xiaoyu (Riley) Z.", "Hong Fei J.")
+sc <- c("Joey M.", "Gisanne D.", "Kangaba Kay K.", "Michel D.", "Tracy M.", "Heather B.", "Ryan D.", "Kurt W.")
+bdc <- c("Pedro JosÃ© T.", "Heidi A.", "Mathilda (Zixuan) Z.", "Kristen C.", "Ruhi M.", "Himanshu M.")
+pwc <- c("Michele C.", "Vivek S.", "Emma S.", "Jiaying Y.", "Ying-Fang L.", "Mudit A.")
+kpi <- c("Mengyuan (Dreama) W.", "Oscar M.", "Nishi N.", "Emery D.", "Rohana H")
+brp <- c("Ben-Isaac M.", "Chongho P.", "Mohamad D.", "Nilanjana R.")
+dcp <- c("Baihan W.", "Mihnea M.", "Hugo C. L.", "Tyler Y.")
+desjardins <- c("Mirellie L.", "Alex G.", "Charles T.", "Kenza S.")
+loreal <- c("Utkarsh N.", "Tarek C.", "Shanshan L.", "Sangwoo P.")
+allianz <- c("Raman V.", "Alicia C.", "Priyanka J.", "Robert L. P.", "Boqun S.")
+auto <- c("HervÃ© M.", "Yann L.")
+bmo <- c("Ilnaz B.", "Rita F.", "Susanne F.")
+bnp <- c("Julien L.", "Jamila G.")
+rbc <- c("John O. A.", "Wheaton K.")
+td <- c("Amr M.", "Haoying X.")
+
+# Create color vectors
+Employer <- dplyr::case_when(sapply(labels, "[")$nodes$name %in% mcgill ~ "McGill",
+                           sapply(labels, "[")$nodes$name %in% sc ~ "SureCall",
+                           sapply(labels, "[")$nodes$name %in% bdc ~ "BDC",
+                           sapply(labels, "[")$nodes$name %in% pwc ~ "Pratt & Whitney",
+                           sapply(labels, "[")$nodes$name %in% kpi ~ "KPI Digital Solutions",
+                           sapply(labels, "[")$nodes$name %in% brp ~ "BRP",
+                           sapply(labels, "[")$nodes$name %in% dcp ~ "Desautels Capital Management",
+                           sapply(labels, "[")$nodes$name %in% desjardins ~ "Desjardins",
+                           sapply(labels, "[")$nodes$name %in% loreal ~ "L'Oréal",
+                           sapply(labels, "[")$nodes$name %in% allianz ~ "Allianz",
+                           sapply(labels, "[")$nodes$name %in% auto ~ "Autodesk",
+                           sapply(labels, "[")$nodes$name %in% bmo ~ "BMO",
+                           sapply(labels, "[")$nodes$name %in% bnp ~ "BNP Paribas",
+                           sapply(labels, "[")$nodes$name %in% rbc ~ "RBC",
+                           sapply(labels, "[")$nodes$name %in% td ~ "TD",
+                           TRUE ~ "Other")
+# Inspect the colors
+Employer
+
+# Idem
+set.seed(12345)
+# Plot the network (version 4: color-coded with weights on both nodes and edges)
+labels %>%
+  ggraph(layout = "fr") +
+  geom_edge_arc(colour= "gray50",
+                lineend = "round",
+                strength = .1,
+                aes(edge_width = weight,
+                    alpha = weight)) +
+  geom_node_point(size=log(v.size)*2, 
+                  aes(color=Employer)) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE, 
+                 point.padding = unit(0.2, "lines"), 
+                 size=sqrt(v.size), 
+                 colour="gray10") +
+  scale_edge_width(range = c(0, 2.5)) +
+  scale_edge_alpha(range = c(0, .3)) +
+  theme_graph(background = "white") +
+  theme(legend.position = "top") +
+  guides(edge_width = FALSE,
+         edge_alpha = FALSE)
